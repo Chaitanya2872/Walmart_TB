@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Cafeteria Dashboard</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <!-- Socket.IO -->
+  <script src="/socket.io/socket.io.js"></script>
+
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <!-- Poppins -->
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <style>
+    * {
+      box-sizing: border-box;
+      font-family: 'Poppins', sans-serif;
+    }
+
+    body {
+      margin: 0;
+      padding: 32px;
+      background: linear-gradient(135deg, #0a0e1a 0%, #1a1f35 100%);
+      color: #e5e7eb;
+      min-height: 100vh;
+    }
+
+    h1 {
+      text-align: center;
+      font-size: 32px;
+      font-weight: 700;
+      margin-bottom: 48px;
+      background: linear-gradient(135deg, #60a5fa 0%, #a78bfa 50%, #ec4899 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      letter-spacing: -0.5px;
+    }
+
+    /* COUNTER CARDS */
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 28px;
+      margin-bottom: 48px;
+    }
+
+    .card {
+      background: linear-gradient(135deg, rgba(17, 24, 39, 0.8) 0%, rgba(31, 41, 55, 0.6) 100%);
+      border-radius: 24px;
+      padding: 28px;
+      border: 1px solid rgba(139, 92, 246, 0.2);
+      backdrop-filter: blur(10px);
+      transition: all 0.3s ease;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 4px;
+      background: linear-gradient(90deg, #60a5fa 0%, #a78bfa 50%, #ec4899 100%);
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+
+    .card:hover {
+      transform: translateY(-4px);
+      border-color: rgba(139, 92, 246, 0.4);
+      box-shadow: 0 20px 40px rgba(139, 92, 246, 0.15);
+    }
+
+    .card:hover::before {
+      opacity: 1;
+    }
+
+    .card.intel::before {
+      background: linear-gradient(90deg, #3b82f6, #60a5fa);
+    }
+
+    .card.twogood::before {
+      background: linear-gradient(90deg, #10b981, #34d399);
+    }
+
+    .card.minimeals::before {
+      background: linear-gradient(90deg, #f59e0b, #fbbf24);
+    }
+
+    .card h2 {
+      font-size: 18px;
+      font-weight: 600;
+      color: #f3f4f6;
+      margin-bottom: 24px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .card h2 .icon {
+      font-size: 24px;
+    }
+
+    .row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 14px;
+      padding: 10px 0;
+      border-bottom: 1px solid rgba(75, 85, 99, 0.3);
+    }
+
+    .row:last-child {
+      border-bottom: none;
+      margin-bottom: 0;
+    }
+
+    .row span {
+      font-size: 14px;
+      color: #9ca3af;
+      font-weight: 500;
+    }
+
+    .row strong {
+      font-size: 16px;
+      font-weight: 600;
+      color: #f3f4f6;
+      padding: 4px 12px;
+      background: rgba(99, 102, 241, 0.15);
+      border-radius: 8px;
+      min-width: 60px;
+      text-align: center;
+    }
+
+    .row strong.status {
+      background: rgba(16, 185, 129, 0.2);
+      color: #34d399;
+      font-size: 13px;
+      text-transform: capitalize;
+    }
+
+    .row strong.high-queue {
+      background: rgba(239, 68, 68, 0.2);
+      color: #f87171;
+    }
+
+    .row strong.medium-queue {
+      background: rgba(251, 191, 36, 0.2);
+      color: #fbbf24;
+    }
+
+    .row strong.low-queue {
+      background: rgba(16, 185, 129, 0.2);
+      color: #34d399;
+    }
+
+    /* CHART */
+    .chart-wrapper {
+      background: linear-gradient(135deg, rgba(17, 24, 39, 0.8) 0%, rgba(31, 41, 55, 0.6) 100%);
+      border-radius: 24px;
+      padding: 32px;
+      max-width: 1000px;
+      margin: auto;
+      border: 1px solid rgba(139, 92, 246, 0.2);
+      backdrop-filter: blur(10px);
+    }
+
+    .chart-wrapper h2 {
+      font-size: 20px;
+      font-weight: 600;
+      color: #f3f4f6;
+      margin-bottom: 28px;
+      text-align: center;
+    }
+
+    canvas {
+      height: 300px !important;
+    }
+
+    /* Pulse animation for live updates */
+    @keyframes pulse {
+      0%, 100% {
+        opacity: 1;
+      }
+      50% {
+        opacity: 0.7;
+      }
+    }
+
+    .live-indicator {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(17, 24, 39, 0.9);
+      padding: 10px 16px;
+      border-radius: 12px;
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      backdrop-filter: blur(10px);
+    }
+
+    .live-dot {
+      width: 8px;
+      height: 8px;
+      background: #10b981;
+      border-radius: 50%;
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    .live-text {
+      font-size: 13px;
+      font-weight: 500;
+      color: #10b981;
+    }
+  </style>
+</head>
+<body>
+
+<div class="live-indicator">
+  <div class="live-dot"></div>
+  <span class="live-text">LIVE</span>
+</div>
+
+<h1>🍽️ Cafeteria Queue Monitor</h1>
+
+<!-- COUNTER CARDS -->
+<div class="cards">
+
+  <!-- INTEL -->
+  <div class="card intel">
+    <h2><span class="icon">🔵</span> Intel Counter</h2>
+    <div class="row"><span>Occupancy</span><strong id="intel_occupancy">--</strong></div>
+    <div class="row"><span>Queue Length</span><strong id="intel_incount" class="queue-value">--</strong></div>
+    <div class="row"><span>Avg Dwell (s)</span><strong id="intel_avg_dwell">--</strong></div>
+    <div class="row"><span>Max Dwell (s)</span><strong id="intel_max_dwell">--</strong></div>
+    <div class="row"><span>Est. Wait Time</span><strong id="intel_estimated_wait">--</strong></div>
+  </div>
+
+  <!-- TWO GOOD -->
+  <div class="card twogood">
+    <h2><span class="icon">🟢</span> Two Good Counter</h2>
+    <div class="row"><span>Occupancy</span><strong id="twogood_occupancy">--</strong></div>
+    <div class="row"><span>Queue Length</span><strong id="twogood_incount" class="queue-value">--</strong></div>
+    <div class="row"><span>Avg Dwell (s)</span><strong id="twogood_avg_dwell">--</strong></div>
+    <div class="row"><span>Max Dwell (s)</span><strong id="twogood_max_dwell">--</strong></div>
+    <div class="row"><span>Status</span><strong id="twogood_waiting_time" class="status">--</strong></div>
+  </div>
+
+  <!-- MINI MEALS -->
+  <div class="card minimeals">
+    <h2><span class="icon">🟡</span> Mini Meals Counter</h2>
+    <div class="row"><span>Occupancy</span><strong id="minimeals_occupancy">--</strong></div>
+    <div class="row"><span>Queue Length</span><strong id="minimeals_incount" class="queue-value">--</strong></div>
+    <div class="row"><span>Avg Dwell</span><strong id="minimeals_avg_dwell">--</strong></div>
+    <div class="row"><span>Max Dwell (s)</span><strong id="minimeals_max_dwell">--</strong></div>
+    <div class="row"><span>Waiting Time</span><strong id="minimeals_waiting_time">--</strong></div>
+  </div>
+
+</div>
+
+<!-- QUEUE BAR CHART -->
+<div class="chart-wrapper">
+  <h2>📊 Queue Length Comparison</h2>
+  <canvas id="queueChart"></canvas>
+</div>
+
+<script>
+  const socket = io();
+
+  const ctx = document.getElementById("queueChart").getContext("2d");
+
+  const queueChart = new Chart(ctx, {
+    type: "bar",
+    data: {
+      labels: ["Intel", "Two Good", "Mini Meals"],
+      datasets: [{
+        label: 'Queue Length',
+        data: [0, 0, 0],
+        backgroundColor: [
+          "rgba(59, 130, 246, 0.8)",
+          "rgba(16, 185, 129, 0.8)",
+          "rgba(245, 158, 11, 0.8)"
+        ],
+        borderColor: [
+          "rgba(96, 165, 250, 1)",
+          "rgba(52, 211, 153, 1)",
+          "rgba(251, 191, 36, 1)"
+        ],
+        borderWidth: 2,
+        borderRadius: 12,
+        barThickness: 80
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { 
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: 'rgba(17, 24, 39, 0.95)',
+          titleColor: '#f3f4f6',
+          bodyColor: '#e5e7eb',
+          borderColor: 'rgba(139, 92, 246, 0.5)',
+          borderWidth: 1,
+          padding: 12,
+          cornerRadius: 8,
+          displayColors: false
+        }
+      },
+      scales: {
+        y: {
+          beginAtZero: true,
+          ticks: { 
+            color: "#9ca3af",
+            font: {
+              size: 12,
+              weight: '500'
+            }
+          },
+          grid: { 
+            color: "rgba(75, 85, 99, 0.2)",
+            drawBorder: false
+          }
+        },
+        x: {
+          ticks: { 
+            color: "#f3f4f6",
+            font: {
+              size: 14,
+              weight: '600'
+            }
+          },
+          grid: { display: false }
+        }
+      }
+    }
+  });
+
+  function getQueueClass(value) {
+    if (value === undefined || value === null || value === '--') return '';
+    const num = parseInt(value);
+    if (num >= 20) return 'high-queue';
+    if (num >= 10) return 'medium-queue';
+    return 'low-queue';
+  }
+
+  socket.on("telemetry", (d) => {
+    for (const key in d) {
+      const el = document.getElementById(key);
+      if (el) {
+        const value = d[key];
+        const displayValue = (value !== undefined && value !== null) ? value : "--";
+        el.textContent = displayValue;
+        
+        // Apply color coding for queue lengths
+        if (key.includes('_incount')) {
+          el.className = 'queue-value ' + getQueueClass(displayValue);
+        }
+      }
+    }
+
+    queueChart.data.datasets[0].data = [
+      d.intel_incount ?? 0,
+      d.twogood_incount ?? 0,
+      d.minimeals_incount ?? 0
+    ];
+    queueChart.update('none'); // Smooth update without animation
+  });
+</script>
+
+</body>
+</html>
