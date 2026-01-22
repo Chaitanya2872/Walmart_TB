@@ -1,6 +1,20 @@
+import express from "express";
 import mqtt from "mqtt";
 import axios from "axios";
 
+/* -------------------- HTTP KEEP-ALIVE SERVER -------------------- */
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+app.get("/", (req, res) => {
+  res.send("MQTT → ThingsBoard worker is running");
+});
+
+app.listen(PORT, () => {
+  console.log(`🌐 Health server running on port ${PORT}`);
+});
+
+/* -------------------- MQTT CONFIG -------------------- */
 const TB_URL =
   "https://demo.thingsboard.io/api/v1/WPyLQlqsqT8KDX0XnnZs/telemetry";
 
@@ -14,6 +28,7 @@ const client = mqtt.connect({
 
 console.log("🚀 MQTT → ThingsBoard service starting");
 
+/* -------------------- MQTT EVENTS -------------------- */
 client.on("connect", () => {
   console.log("✅ Connected to HiveMQ");
   client.subscribe([
@@ -62,13 +77,19 @@ client.on("message", async (topic, payload) => {
       };
     }
 
-    await axios.post(TB_URL, telemetry, {
-      headers: { "Content-Type": "application/json" }
-    });
+    if (Object.keys(telemetry).length > 0) {
+      await axios.post(TB_URL, telemetry, {
+        headers: { "Content-Type": "application/json" }
+      });
 
-    console.log("📤 Sent flattened telemetry:", telemetry);
-
+      console.log("📤 Sent flattened telemetry:", telemetry);
+    }
   } catch (err) {
     console.error("❌ Error processing message:", err.message);
   }
+});
+
+/* -------------------- ERROR HANDLING -------------------- */
+client.on("error", (err) => {
+  console.error("❌ MQTT Error:", err.message);
 });
